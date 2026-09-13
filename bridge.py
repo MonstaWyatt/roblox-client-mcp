@@ -2,6 +2,7 @@
 import json
 import secrets
 import threading
+import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -124,18 +125,24 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(400, {"error": str(exc)})
 
 
+class LocalServer(ThreadingHTTPServer):
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def create_server(port=28430):
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = LocalServer(("127.0.0.1", port), Handler)
     server.broker = Broker()
     return server
 
 
 if __name__ == "__main__":
-    server = create_server()
-    print("Roblox bridge listening on 127.0.0.1:28430", flush=True)
+    from service import run
     try:
-        server.serve_forever()
+        run()
     except KeyboardInterrupt:
         pass
-    finally:
-        server.server_close()
