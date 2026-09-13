@@ -1,7 +1,5 @@
-"""Authenticated loopback relay. Executes no game code or OS commands."""
-import hmac
+"""Loopback relay. Executes no game code or OS commands."""
 import json
-import os
 import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -72,14 +70,10 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             pass
 
-    def authorized(self, role):
+    def allowed_request(self):
         if (self.headers.get("Host") != f"127.0.0.1:{self.server.server_port}"
                 or self.headers.get("Origin") is not None):
             self.reply(403, {"error": "Host or Origin rejected"})
-            return False
-        expected = "Bearer " + self.server.tokens[role]
-        if not hmac.compare_digest(self.headers.get("Authorization", "").encode(), expected.encode()):
-            self.reply(401, {"error": "Authentication required"})
             return False
         return True
 
@@ -99,14 +93,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path != "/task":
             self.reply(404, {"error": "Unknown route"})
-        elif self.authorized("client"):
+        elif self.allowed_request():
             self.reply(200, {"task": self.server.broker.poll()})
 
     def do_POST(self):
         if self.path not in ("/execute", "/result"):
             self.reply(404, {"error": "Unknown route"})
             return
-        if not self.authorized("control" if self.path == "/execute" else "client"):
+        if not self.allowed_request():
             return
         try:
             data = self.body()
@@ -130,17 +124,14 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(400, {"error": str(exc)})
 
 
-def create_server(control, client, port=28430):
-    if min(len(control), len(client)) < 32 or control == client:
-        raise ValueError("Use distinct control/client secrets, each at least 32 characters")
+def create_server(port=28430):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    server.tokens = {"control": control, "client": client}
     server.broker = Broker()
     return server
 
 
 if __name__ == "__main__":
-    server = create_server(os.environ["ROBLOX_CONTROL_TOKEN"], os.environ["ROBLOX_CLIENT_TOKEN"])
+    server = create_server()
     print("Roblox bridge listening on 127.0.0.1:28430", flush=True)
     try:
         server.serve_forever()

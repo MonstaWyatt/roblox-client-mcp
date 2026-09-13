@@ -1,6 +1,5 @@
-"""Stdio MCP adapter. Keep its control token out of client Lua."""
+"""Stdio MCP adapter for the local bridge."""
 import json
-import os
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 from mcp.server.fastmcp import FastMCP
@@ -17,13 +16,10 @@ def execute(code: str) -> str:
     A relay timeout does not stop code in the game. Never automatically retry
     timed-out actions, since they might already have taken effect.
     """
-    token = os.environ.get("ROBLOX_CONTROL_TOKEN")
-    if not token:
-        return json.dumps({"error": "ROBLOX_CONTROL_TOKEN is not configured"})
     request = Request(
         "http://127.0.0.1:28430/execute",
         data=json.dumps({"code": code}).encode(),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + token},
+        headers={"Content-Type": "application/json"},
     )
     try:
         with opener.open(request, timeout=25) as response:
